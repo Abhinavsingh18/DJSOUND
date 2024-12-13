@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotation Generator with PDF</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        header, footer {
+            text-align: center;
+            padding: 10px;
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+        }
+        #quotation-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #fff;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        .add-item-button, .generate-pdf-button {
+            margin: 10px 5px;
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .add-item-button:hover, .generate-pdf-button:hover {
+            background-color: #0056b3;
+        }
+        .editable {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 5px;
+            text-align: center;
+        }
+        .image-preview img {
+            width: 100px;
+            height: auto;
+        }
+        .totals {
+            margin-top: 20px;
+            text-align: right;
+        }
+        .totals label {
+            font-weight: bold;
+        }
+        .pagination {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .pagination button {
+            margin: 0 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <h1 style="color: red; font-family: 'Times New Roman', Times, serif; font-weight: bold;">NEW MAHAKAL DJ SOUND</h1>
+        <p style="font-family: 'Times New Roman', Times, serif; font-weight: bold;">D-BLOCK,SAMADHIYA COLONY,NEAR SANTOSH VATIKA ,LASHKAR,GWALIOR,M.P.</p>
+        <p style="font-family: 'Times New Roman', Times, serif; font-weight: bold;"><strong>Quotation</strong></p>
+    </header>
+
+    <form id="quotationForm">
+        <label for="customerName">Name:</label>
+        <input type="text" id="customerName" name="customerName" placeholder="Enter Customer Name" required>
+        <br>
+        <br>
+        <label for="venue">Venue:</label>
+        <input type="text" id="venue" name="venue" placeholder="Enter Venue" required>
+        <br>
+        <br>
+        <label for="quotationDate">Date :</label>
+        <input type="date" id="quotationDate" name="quotationDate" required>
+    </form>
+    <!-- <button onclick="generatePDF()">Generate PDF</button> -->
+    
+    <!-- Quotation Container -->
+    <section id="quotation-container">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button class="add-item-button" onclick="addItem()">Add Item</button>
+            <button class="generate-pdf-button" onclick="generatePDF()">Generate PDF</button>
+        </div>
+        <table id="quotationTable">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Image</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Items will be dynamically added here -->
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        <div class="pagination" id="pagination"></div>
+
+        <!-- Totals Section -->
+        <div class="totals">
+            <label for="grandTotal">Grand Total:</label>
+            <span id="grandTotal">₹0.00</span>
+        </div>
+        <div class="totals">
+            <label for="discount">Discount:</label>
+            <input type="number" id="discount" placeholder="Enter Discount" onchange="updateFinalAmount()">
+        </div>
+        <div class="totals">
+            <label for="finalAmount">Final Amount:</label>
+            <span id="finalAmount">₹0.00</span>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <!-- <footer>
+        <p>GSTIN: 03ILZPS7086Q1ZK | A/c No: 50200029180692 | IFSC Code: HDFC0002223</p>
+        <p>Terms & Conditions: Goods once sold will not be taken back. Interest @24% p.a. will be charged if bill is not paid within 15 days.</p>
+    </footer> -->
+
+    <script>
+        let itemCount = 0;
+        const itemsPerPage = 10;
+        let currentPage = 1;
+        let items = [];
+
+        const quotationTable = document.getElementById('quotationTable').querySelector('tbody');
+        const pagination = document.getElementById('pagination');
+        const grandTotalElement = document.getElementById('grandTotal');
+        const discountElement = document.getElementById('discount');
+        const finalAmountElement = document.getElementById('finalAmount');
+
+        function addItem() {
+            itemCount++;
+            const item = {
+                id: itemCount,
+                name: '',
+                image: '',
+                price: 0,
+                quantity: 0,
+                total: 0
+            };
+            items.push(item);
+            renderItems();
+        }
+
+        function renderItems() {
+            quotationTable.innerHTML = '';
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const currentItems = items.slice(start, end);
+
+            currentItems.forEach(item => {
+                const row = document.createElement('tr');
+                row.id = `item-${item.id}`;
+                row.innerHTML = `
+                    <td><input type="text" placeholder="Enter Item Name" class="editable" value="${item.name}" onchange="updateItem(${item.id}, 'name', this.value)"></td>
+                    <td>
+                        <input type="file" accept="image/*" onchange="previewImage(event, ${item.id})">
+                        <div class="image-preview" id="imagePreview-${item.id}">${item.image ? `<img src="${item.image}" alt="Item Image">` : ''}</div>
+                    </td>
+                    <td><input type="number" placeholder="Enter Price" class="editable" value="${item.price}" onchange="updateItem(${item.id}, 'price', this.value)"></td>
+                    <td><input type="number" placeholder="Enter Quantity" class="editable" value="${item.quantity}" onchange="updateItem(${item.id}, 'quantity', this.value)"></td>
+                    <td><input type="text" id="total-${item.id}" class="editable" value="${item.total.toFixed(2)}" readonly></td>
+                    <td><button onclick="removeItem(${item.id})">Remove</button></td>
+                `;
+                quotationTable.appendChild(row);
+            });
+
+            renderPagination();
+            calculateGrandTotal();
+        }
+
+        function updateItem(id, field, value) {
+            const item = items.find(i => i.id === id);
+            if (field === 'price' || field === 'quantity') {
+                item[field] = parseFloat(value) || 0;
+                item.total = item.price * item.quantity;
+            } else if (field === 'name') {
+                item.name = value;
+            }
+            renderItems();
+        }
+
+        function previewImage(event, id) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const item = items.find(i => i.id === id);
+                    item.image = reader.result;
+                    renderItems();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function calculateGrandTotal() {
+            let grandTotal = 0;
+            items.forEach(item => {
+                grandTotal += item.total;
+            });
+            grandTotalElement.innerText = `₹${grandTotal.toFixed(2)}`;
+            updateFinalAmount();
+        }
+
+        function updateFinalAmount() {
+            const grandTotal = parseFloat(grandTotalElement.innerText.replace('₹', '')) || 0;
+            const discount = parseFloat(discountElement.value) || 0;
+            const finalAmount = grandTotal - discount;
+            finalAmountElement.innerText = `₹${finalAmount.toFixed(2)}`;
+        }
+
+        function removeItem(id) {
+            items = items.filter(i => i.id !== id);
+            renderItems();
+        }
+
+        function renderPagination() {
+            pagination.innerHTML = '';
+            const totalPages = Math.ceil(items.length / itemsPerPage);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const button = document.createElement('button');
+                button.innerText = i;
+                button.disabled = i === currentPage;
+                button.onclick = () => {
+                    currentPage = i;
+                    renderItems();
+                };
+                pagination.appendChild(button);
+            }
+        }
+
+        async function generatePDF() {
+            // Convert images to base64 if they exist
+            const processedItems = await Promise.all(items.map(async (item, index) => ({
+                sno: (index + 1).toString(),
+                name: item.name.toUpperCase() || '-',
+                image: item.image ? { image: item.image, width: 50, height: 50 } : '-',
+                price: item.price.toFixed(2).toUpperCase() || '-',
+                quantity: item.quantity.toString().toUpperCase() || '-',
+                total: item.total.toFixed(2).toUpperCase() || '-'
+            })));
+
+            const customerName = document.getElementById('customerName').value.toUpperCase() || 'UNKNOWN';
+            const quotationDate = document.getElementById('quotationDate').value.toUpperCase() || new Date().toLocaleDateString().toUpperCase();
+            const venue = document.getElementById('venue').value.toUpperCase() || 'UNKNOWN';
+            let discount = parseFloat(document.getElementById('discount').value || '0');
+            const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
+            const finalTotal = grandTotal - discount;
+
+            const docDefinition = {
+                pageSize: 'A4',
+                pageMargins: [40, 40, 40, 60],
+                content: [
+                    // Company details at the top
+                    { text: 'NEW MAHAKAL DJ SOUND', style: 'header', color: 'red', fontSize: 40, },
+                    { text: 'D-BLOCK,SAMADHIYA COLONY,NEAR SANTOSH VATIKA ,LASHKAR,GWALIOR,M.P.', style: 'subheader',bold: true },
+                    { text: [
+                        { text: 'MOBILE NO: ', style: 'subheader' },
+                        { text: '6269886524, 7697973939', style: 'subheader', bold: true }
+                    ]},
+                    { text: 'EMAIL: NEWMAHAKALWEDDINGPLANNER@GMAIL.COM', style: 'subheader' },
+                    { text: 'QUOTATION', style: 'quotationTitle' },
+                    
+                    // Customer details
+                    {
+                        columns: [
+                            { text: `NAME: ${customerName}`, width: '30%',bold: true },
+                            { text: `VENUE: ${venue}`, width: '30%',bold: true },
+                            { text: `DATE: ${quotationDate}`, width: '40%', alignment: 'right',bold: true }
+                        ],
+                        columnGap: 10,
+                        margin: [0, 20, 0, 20]
+                    },
+
+                    // Rest of your content (table, etc.)
+                    {
+                        table: {
+                            headerRows: 1,
+                            widths: [30, 160, 60, 60, 60, 45],
+                            body: [
+                                // Header
+                                [
+                                    { text: 'S.NO', style: 'tableHeader' },
+                                    { text: 'ITEM NAME', style: 'tableHeader' },
+                                    { text: 'IMAGE', style: 'tableHeader' },
+                                    { text: 'PRICE', style: 'tableHeader' },
+                                    { text: 'QUANTITY', style: 'tableHeader' },
+                                    { text: 'TOTAL', style: 'tableHeader' }
+                                ],
+                                // Dynamic rows
+                                ...processedItems.map(item => [
+                                    item.sno,
+                                    { 
+                                        text: item.name,
+                                        wordWrap: true,
+                                        alignment: 'left'
+                                    },
+                                    item.image,
+                                    item.price,
+                                    item.quantity,
+                                    item.total
+                                ])
+                            ]
+                        },
+                        layout: {
+                            hLineWidth: function(i, node) { return 1; },
+                            vLineWidth: function(i, node) { return 1; },
+                            hLineColor: function(i, node) { return '#aaa'; },
+                            vLineColor: function(i, node) { return '#aaa'; },
+                            paddingLeft: function(i, node) { return 10; },
+                            paddingRight: function(i, node) { return 10; },
+                            paddingTop: function(i, node) { return 10; },
+                            paddingBottom: function(i, node) { return 10; }
+                        }
+                    },
+                    {
+                        stack: [
+                            { text: `GRAND TOTAL: ₹${grandTotal.toFixed(2).toUpperCase()}`, alignment: 'right', margin: [0, 20, 0, 5] },
+                            { text: `DISCOUNT: ₹${discount.toFixed(2).toUpperCase()}`, alignment: 'right', margin: [0, 0, 0, 5] },
+                            { text: `FINAL TOTAL: ₹${finalTotal.toFixed(2).toUpperCase()}`, alignment: 'right', margin: [0, 0, 0, 20] }
+                        ]
+                    },
+                    {
+                        text: 'TERMS & CONDITIONS',
+                        style: 'sectionHeader',
+                        margin: [0, 20, 0, 10]
+                    },
+                    {
+                        ol: [
+                            'ARTIST CONFIRMATION WILL BE FINALIZED WITHIN THREE DAYS AFTER RECEIVING THE ADVANCE PAYMENT.',
+                            'ALL COSTS MENTIONED ARE APPROXIMATE AND WILL BE CONFIRMED ONCE THE VENUE, EVENT DIMENSIONS CREATIVE ELEMENTS, AND CONTENT ARE FINALIZED.',
+                            'ANY ADDITIONS OR MODIFICATIONS REQUESTED BEYOND THE AGREED SCOPE WILL BE CHARGED EXTRA.',
+                            'AN ADVANCE PAYMENT IS REQUIRED TO CONFIRM THE BOOKING. THE REMAINING AMOUNT MUST BE SETTLED BEFORE THE EVENT DATE UNLESS OTHERWISE AGREED UPON.',
+                            'ALL ITEMS PROVIDED ARE FOR RENTAL PURPOSES ONLY AND WILL REMAIN THE PROPERTY OF THE FIRM UNLESS EXPLICITLY STATED OTHERWISE IN THE AGREEMENT.',
+                            'THE FIRM WILL NOT BE LIABLE FOR DELAYS OR NON-FULFILLMENT OF SERVICES DUE TO UNFORESEEN CIRCUMSTANCES.',
+                            'THE CLIENT MUST ENSURE THAT THE VENUE IS READY AND ACCESSIBLE FOR SETUP AS PER THE AGREED TIMELINE.',
+                            'ALL CHANGES OR ADDITIONS TO THE PROJECT MUST BE COMMUNICATED IN WRITING AND AGREED UPON BY BOTH PARTIES.'
+                        ],
+                        margin: [0, 0, 0, 20],
+                        fontSize: 10
+                    }
+                ],
+                footer: function(currentPage, pageCount) {
+                    return {
+                        stack: [
+                            { canvas: [ { type: 'line', x1: 40, y1: 0, x2: 550, y2: 0, lineWidth: 1 } ] },
+                            { text: `PAGE ${currentPage} OF ${pageCount}`, alignment: 'center' ,margin: [0, 10, 0, 0]},
+                            { text: 'MO. NO. - 6269886524, 7697973939', alignment: 'center', margin: [0, 10, 0, 5], bold: true },
+                        ]
+                    };
+                },
+                styles: {
+                    header: {
+                        fontSize: 20,
+                        bold: true,
+                        alignment: 'center',
+                        margin: [0, 0, 0, 5]
+                    },
+                    subheader: {
+                        fontSize: 12,
+                        alignment: 'center',
+                        margin: [0, 0, 0, 5]
+                    },
+                    quotationTitle: {
+                        fontSize: 16,
+                        bold: true,
+                        alignment: 'center',
+                        margin: [0, 10, 0, 10]
+                    },
+                    tableHeader: {
+                        bold: true,
+                        fontSize: 12,
+                        fillColor: '#f4f4f4'
+                    },
+                    sectionHeader: {
+                        fontSize: 14,
+                        bold: true,
+                        margin: [0, 20, 0, 10]
+                    }
+                }
+            };
+
+            pdfMake.createPdf(docDefinition).download(`${customerName}_QUOTATION.PDF`);
+        }
+
+        renderItems();
+    </script>
+</body>
+</html>
